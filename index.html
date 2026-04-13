@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2つの確率分布の比較</title>
+<style>
+  :root {
+    --bg:#f7f7fb;
+    --card:#ffffff;
+    --line:#d9dbe7;
+    --text:#1f2430;
+    --sub:#5b6475;
+    --accent:#2563eb;
+    --danger:#b91c1c;
+    --coin:#2563eb;
+    --uniform:#0f766e;
+    --mean:#dc2626;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.5;
+  }
+  .wrap {
+    max-width:960px;
+    margin:0 auto;
+    padding:14px;
+  }
+  .card {
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:14px;
+    box-shadow:0 8px 24px rgba(20,20,40,0.06);
+    margin-bottom:12px;
+  }
+  h1 { font-size:1.4rem; margin:0 0 6px; }
+  h2 { font-size:1rem; margin:0 0 8px; }
+  p { margin:0.25rem 0; }
+  .sub, .note { color:var(--sub); }
+  .btns { display:flex; flex-wrap:wrap; gap:10px; }
+  button {
+    border:none;
+    border-radius:12px;
+    padding:10px 14px;
+    font-size:0.95rem;
+    cursor:pointer;
+    background:#e9eefc;
+    color:#16306b;
+    font-weight:700;
+    min-height:42px;
+  }
+  button.primary { background:var(--accent); color:#fff; }
+  button.danger { background:var(--danger); color:#fff; }
+  button:disabled { opacity:0.55; cursor:default; }
+  .stats {
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+  }
+  .stat {
+    padding:11px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:#fcfcff;
+  }
+  .stat .k { color:var(--sub); font-size:0.9rem; }
+  .stat .v { font-size:1.15rem; font-weight:800; margin-top:4px; }
+  svg {
+    width:100%;
+    height:auto;
+    display:block;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:16px;
+  }
+  .below-stats {
+    margin-top:6px;
+    color:var(--sub);
+    font-size:0.9rem;
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+  }
+  .legend {
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+    color:var(--sub);
+    font-size:0.88rem;
+    margin-top:10px;
+  }
+  .dot {
+    display:inline-block;
+    width:12px;
+    height:12px;
+    border-radius:999px;
+    margin-right:6px;
+    vertical-align:-1px;
+  }
+  .mono { font-variant-numeric:tabular-nums; }
+  @media (max-width:760px) {
+    .stats { grid-template-columns:1fr; }
+    h1 { font-size:1.2rem; }
+    .wrap { padding:10px; }
+    .card { padding:10px; margin-bottom:10px; }
+    svg { max-height:190px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>2つの確率分布の比較シミュレーション</h1>
+    <p class="sub">1回の試行で、4枚のコインの表の枚数と、0〜4のカードから1枚引いた数字を同時に記録します。</p>
+  </div>
+
+  <div class="card">
+    <h2>操作</h2>
+    <div class="btns" style="align-items:center; gap:10px;">
+      <button type="button" id="startBtn" class="primary">開始</button>
+      <button type="button" id="pauseBtn">一時停止</button>
+      <button type="button" id="stepBtn">1回行う</button>
+      <button type="button" id="resetBtn" class="danger">リセット</button>
+      <div style="display:flex; align-items:center; gap:8px; margin-left:8px; white-space:nowrap;">
+        <label for="speedSlider" style="margin:0; font-size:0.9rem;">速度調整</label>
+        <input type="range" id="speedSlider" min="10" max="200" value="80" style="width:220px; transform:scaleX(-1);">
+      </div>
+    </div>
+    <p class="note">赤い細線は平均の位置です。</p>
+  </div>
+
+  <div class="card">
+    <h2>現在の状況</h2>
+    <div class="stats">
+      <div class="stat"><div class="k">現在の試行回数 n</div><div class="v mono" id="nValue">0</div></div>
+      <div class="stat"><div class="k">直前のコイン（表の枚数）</div><div class="v mono" id="lastCoin">–</div></div>
+      <div class="stat"><div class="k">直前のカード（0〜4）</div><div class="v mono" id="lastCard">–</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>上：4枚のコインの表の枚数（二項分布）</h2>
+    <svg id="coinChart" viewBox="0 0 860 220" aria-label="コインの棒グラフ"></svg>
+    <div class="below-stats"><span>平均：<span class="mono" id="coinMeanText">–</span></span><span>標準偏差：<span class="mono" id="coinSdText">–</span></span></div>
+  </div>
+
+  <div class="card">
+    <h2>下：0〜4のカードを1枚引く（一様分布）</h2>
+    <svg id="cardChart" viewBox="0 0 860 220" aria-label="カードの棒グラフ"></svg>
+    <div class="below-stats"><span>平均：<span class="mono" id="cardMeanText">–</span></span><span>標準偏差：<span class="mono" id="cardSdText">–</span></span></div>
+  </div>
+
+  <div class="card">
+    <div class="legend">
+      <span><span class="dot" style="background:#2563eb"></span>コインの相対度数</span>
+      <span><span class="dot" style="background:#0f766e"></span>カードの相対度数</span>
+      <span><span class="dot" style="background:#dc2626"></span>平均の位置</span>
+      <span><span class="dot" style="background:#eab308"></span>平均±標準偏差</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  const coinCounts = [0, 0, 0, 0, 0];
+  const cardCounts = [0, 0, 0, 0, 0];
+  let n = 0;
+  let lastCoin = null;
+  let lastCard = null;
+  let running = false;
+  let timer = null;
+  let SPEED_MS = 80;
+
+  const startBtn = document.getElementById("startBtn");
+  const speedSlider = document.getElementById("speedSlider");
+  const pauseBtn = document.getElementById("pauseBtn");
+  const stepBtn = document.getElementById("stepBtn");
+  const resetBtn = document.getElementById("resetBtn");
+
+  function trialCoin() {
+    let heads = 0;
+    for (let i = 0; i < 4; i++) {
+      if (Math.random() < 0.5) heads += 1;
+    }
+    return heads;
+  }
+
+  function trialCard() {
+    return Math.floor(Math.random() * 5);
+  }
+
+  function sampleMean(counts) {
+    if (n === 0) return null;
+    let s = 0;
+    for (let x = 0; x <= 4; x++) s += x * counts[x];
+    return s / n;
+  }
+
+  function sampleSD(counts) {
+    if (n === 0) return null;
+    const m = sampleMean(counts);
+    let s = 0;
+    for (let x = 0; x <= 4; x++) {
+      const d = x - m;
+      s += d * d * counts[x];
+    }
+    return Math.sqrt(s / n);
+  }
+
+  function getFreqs(counts) {
+    if (n === 0) return [0, 0, 0, 0, 0];
+    return counts.map(c => c / n);
+  }
+
+  function trialOnce() {
+    const c = trialCoin();
+    const u = trialCard();
+    coinCounts[c] += 1;
+    cardCounts[u] += 1;
+    n += 1;
+    lastCoin = c;
+    lastCard = u;
+  }
+
+  function startRunning() {
+    SPEED_MS = Number(speedSlider.value);
+    if (running) return;
+    running = true;
+    timer = setInterval(function () {
+      trialOnce();
+      updateAll();
+    }, SPEED_MS);
+    updateButtons();
+  }
+
+  function stopRunning() {
+    running = false;
+    if (timer !== null) {
+      clearInterval(timer);
+      timer = null;
+    }
+    updateButtons();
+  }
+
+  function resetAll() {
+    stopRunning();
+    for (let i = 0; i < 5; i++) {
+      coinCounts[i] = 0;
+      cardCounts[i] = 0;
+    }
+    n = 0;
+    lastCoin = null;
+    lastCard = null;
+    updateAll();
+  }
+
+  function updateButtons() {
+    startBtn.disabled = running;
+    pauseBtn.disabled = !running;
+  }
+
+  function updateStats() {
+    document.getElementById("nValue").textContent = String(n);
+    document.getElementById("lastCoin").textContent = lastCoin === null ? "–" : String(lastCoin);
+    document.getElementById("lastCard").textContent = lastCard === null ? "–" : String(lastCard);
+
+    const coinMean = sampleMean(coinCounts);
+    const coinSd = sampleSD(coinCounts);
+    const cardMean = sampleMean(cardCounts);
+    const cardSd = sampleSD(cardCounts);
+
+    document.getElementById("coinMeanText").textContent = coinMean === null ? "–" : coinMean.toFixed(4);
+    document.getElementById("coinSdText").textContent = coinSd === null ? "–" : coinSd.toFixed(4);
+    document.getElementById("cardMeanText").textContent = cardMean === null ? "–" : cardMean.toFixed(4);
+    document.getElementById("cardSdText").textContent = cardSd === null ? "–" : cardSd.toFixed(4);
+  }
+
+  function line(x1, y1, x2, y2, color = "#888", width = 1, dash = "") {
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${width}"${dash ? ` stroke-dasharray="${dash}"` : ""} />`;
+  }
+
+  function text(x, y, str, size = 14, color = "#333", anchor = "middle", weight = 500) {
+    return `<text x="${x}" y="${y}" font-size="${size}" fill="${color}" text-anchor="${anchor}" font-weight="${weight}" font-family="-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif">${str}</text>`;
+  }
+
+  function rect(x, y, w, h, fill, opacity = 1) {
+    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" opacity="${opacity}" rx="8" ry="8" />`;
+  }
+
+  function renderChart(svgId, counts, color) {
+    const svg = document.getElementById(svgId);
+    const freqs = getFreqs(counts);
+    const meanValue = sampleMean(counts);
+    const sdValue = sampleSD(counts);
+
+    const W = 860, H = 220;
+    const left = 62, right = 18, top = 16, bottom = 42;
+    const cw = W - left - right;
+    const ch = H - top - bottom;
+    const maxY = 0.45;
+    const groupW = cw / 5;
+    const barW = groupW * 0.9;  // ほぼ接する太さ
+    let out = "";
+
+    out += rect(0, 0, W, H, "#ffffff", 1);
+
+    for (let g = 0; g <= 4; g++) {
+      const yVal = g * 0.10;
+      const y = top + ch - (yVal / maxY) * ch;
+      out += line(left, y, left + cw, y, "#d8dce8", 1);
+      out += text(left - 8, y + 4, yVal.toFixed(2), 11, "#5b6475", "end", 500);
+    }
+
+    out += line(left, top, left, top + ch, "#4b5563", 1.5);
+    out += line(left, top + ch, left + cw, top + ch, "#4b5563", 1.5);
+    out += text(24, top + ch / 2, "確率", 12, "#374151", "middle", 700);
+
+    for (let i = 0; i < 5; i++) {
+      const centerX = left + groupW * (i + 0.5);
+      const x = centerX - barW / 2;
+      const h = n === 0 ? 0 : Math.max(0, Math.min(ch, (freqs[i] / maxY) * ch));
+      const y = top + ch - h;
+      out += rect(x, y, barW, h, color, 0.88);
+      out += text(centerX, top + ch + 22, String(i), 13, "#111827", "middle", 700);
+      if (n > 0) {
+        out += text(centerX, Math.max(16, y - 6), freqs[i].toFixed(3), 11, color, "middle", 700);
+      }
+    }
+
+    if (meanValue !== null) {
+      const meanX = left + groupW * (meanValue + 0.5);
+      out += line(meanX, top, meanX, top + ch, "#dc2626", 2);
+
+      if (sdValue !== null) {
+        const minusX = left + groupW * (meanValue - sdValue + 0.5);
+        const plusX = left + groupW * (meanValue + sdValue + 0.5);
+        out += line(minusX, top, minusX, top + ch, "#eab308", 2);
+        out += line(plusX, top, plusX, top + ch, "#eab308", 2);
+      }
+    }
+
+    out += text(W / 2, H - 10, "値", 12, "#374151", "middle", 700);
+    svg.innerHTML = out;
+  }
+
+  function updateAll() {
+    updateStats();
+    renderChart("coinChart", coinCounts, "#2563eb");
+    renderChart("cardChart", cardCounts, "#0f766e");
+  }
+
+  startBtn.addEventListener("click", startRunning);
+  pauseBtn.addEventListener("click", stopRunning);
+  stepBtn.addEventListener("click", function(){
+    stopRunning();
+    trialOnce();
+    updateAll();
+  });
+  resetBtn.addEventListener("click", resetAll);
+
+  speedSlider.addEventListener("input", function(){
+    SPEED_MS = Number(this.value);
+    if(running){
+      stopRunning();
+      startRunning();
+    }
+  });
+
+  updateButtons();
+  updateAll();
+</script>
+</body>
+</html>
